@@ -1,0 +1,219 @@
+rm(list=(ls())) #clears variables
+
+links<-read.csv("Links.csv")
+
+#***Count parasites for each resource
+
+
+# Subsetting using dplyr
+library(dplyr)
+
+subset_links <- links %>%
+  filter(Feeding.Site %in% c(1, 2))
+
+# Extract unique resource names
+unique_resource_names <- sort(unique(subset_links$resourceName))
+
+# Initialize the new data frame
+species_data <- data.frame(
+  resourceName = unique_resource_names,
+  #species_name = I(list()),  # Initialize as list column to hold multiple species names
+  num_parasite_species = NA,
+  stringsAsFactors = FALSE
+)
+
+# Populate the data frame
+for (i in 1:nrow(species_data)) {
+  resource <- species_data$resourceName[i]
+  subset_resource <- subset(subset_links, resourceName == resource)
+  
+  
+  # Calculate total number of parasite species
+  species_data$num_parasite_species[i] <- length(unique(subset_resource$consumerName))
+}
+
+# Flatten species_name list column to a single string for readability
+species_data$resourceName <- sapply(species_data$resourceName, paste, collapse = ", ")
+
+# Printing the populated data frame
+print(species_data)
+
+
+#**creates unique list to relate links to nodes
+
+# Ensure the species_name column is of character type
+species_data$resourceName <- as.character(species_data$resourceName)
+
+# Extracting unique species names from species_data
+species_list <- unlist(strsplit(species_data$resourceName, ", "))
+unique_species <- unique(species_list)
+
+# Printing unique species names
+
+print(unique_species)
+#------------------------------------------------------------------------------------------
+
+
+
+#***add column for organismal group and consumer strategy
+
+# create and initialize a data frame from "nodes" that include only names of
+
+
+nodes<-read.csv("Nodes.csv") 
+
+
+#create data frame
+#subset_nodes <- matrix(NA,length(nodes$Sp.name),3)
+
+#populate data frame
+#subset_nodes[,1]<-nodes$Name.Sp.stage
+#subset_nodes[,2]<-nodes$Organismal.Group
+#subset_nodes[,3]<-nodes$Consumer.Strategy
+#colnames(subset_nodes)<-c("Name.Sp.stage","Organismal.Group","Consumer.Strategy")
+
+for (i in 1:dim(species_data)[1])
+{
+  resourceName<-species_data[i,"resourceName"]
+  h<-subset(nodes, Name.Sp.stage==resourceName)
+  species_data$Consumer.Strategy[i]<-h$Consumer.Strategy[1]
+  species_data$Organismal.Group[i]<-h$Organismal.Group[1]
+}
+
+#print(subset_nodes)
+
+#*** add another column for umbrella terms to species data
+
+
+# Initialize subset_nodes with columns from nodes
+#subset_nodes <- data.frame(
+# Name.Sp.stage = nodes$Name.Sp.stage,
+#Organismal.Group = nodes$Organismal.Group,
+ # Consumer.Strategy = nodes$Consumer.Strategy,
+ #stringsAsFactors = FALSE
+#)
+#subset_nodes<-subset_nodes[,c("Name.Sp.stage","Organismal.Group","Consumer.Strategy")]
+
+
+#my Lists for umbrella terms
+protist.list <- c("Microalgae", "Macroalgae", "Other")
+vert.list <- c("Bird", "Fish", "Elasmobranch", "Mammal")
+invert.list <- c("Crustacea", "Gastropoda", "Ophiuroidea", "Bivalvia", "Polychaeta", "Echinoidea", "Porifera", "Asteroidea", "Octocorallia", "Cephalopoda", "Chaetognatha", "Holothuroidea", "Hydrozoa")
+
+"populating columns"
+#working column population code
+
+species_data$Umbrella.Term <- "" 
+
+for (i in 1:nrow(species_data)) {
+  resourceName <- species_data[i, "resourceName"]
+  h <- subset(nodes, Name.Sp.stage == resourceName)
+      
+  # Assign Umbrella.Term based on Organismal.Group
+  if (h$Organismal.Group[1] %in% protist.list) {
+    species_data$Umbrella.Term[i] <- "Protist"
+  }
+  if (h$Organismal.Group[1] %in% vert.list) {      
+    species_data$Umbrella.Term[i] <- "Vertebrate"
+  }
+  if (h$Organismal.Group[1] %in% invert.list) {      
+    species_data$Umbrella.Term[i] <- "Invertebrate"
+  } 
+}
+
+
+
+print(species_data)
+
+#access gg
+library(ggplot2)
+
+#mean(species_data[species_data$Umbrella.Term=="Vertebrate"&species_data$Consumer.Strategy=="Herbivore", "num_parasite_species"])
+
+# Calculate the average number of parasite species for each Umbrella.Term and Consumer.Strategy group
+average_parasites <- species_data %>%
+  group_by(Umbrella.Term, Consumer.Strategy) %>%
+  summarize(avg_num_parasites = mean(num_parasite_species, na.rm = TRUE))
+
+# Print the calculated averages
+print(average_parasites)
+
+# Create the plot
+ggplot(average_parasites, aes(x = Umbrella.Term, y = avg_num_parasites, fill = Consumer.Strategy)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Average Number of Parasite Species by Umbrella Term and Consumer Strategy",
+       x = "Umbrella Term",
+       y = "Average Number of Parasite Species") +
+  theme_minimal()
+
+
+
+# Group by Organismal.Group and Consumer.Strategy and calculate the average num_parasite_species
+averaged_data <- species_data %>%
+ group_by(Organismal.Group, Consumer.Strategy) %>%
+  summarize(avg_num_parasite_species = mean(num_parasite_species, na.rm = TRUE))
+
+#Print the averaged data to check the result
+ print(averaged_data)
+
+
+
+# Create the plot using ggplot2
+#ggplot(averaged_data, aes(x = Organismal.Group, y = avg_num_parasite_species, fill = Consumer.Strategy)) +
+#  geom_bar(stat = "identity", position = position_dodge()) +
+#  labs(title = "Average Number of Parasite Species by Organismal Group and Consumer Strategy",
+ #      x = "Organismal Group",
+  #     y = "Average Number of Parasite Species") +
+ # theme_minimal()
+
+library(knitr)
+
+# Create a table using knitr::kable
+table <- knitr::kable(averaged_data, 
+                      caption = "Average Number of Parasite Species by Organismal Group and Consumer Strategy",
+                      col.names = c("Organismal Group", "Consumer Strategy", "Average Number of Parasite Species"))
+
+# Print the table
+print(table)
+
+
+
+
+
+#table for group totals
+table(species_data$Consumer.Strategy)
+
+
+#box plot for cons strat
+species_data$Consumer.Strategy<-as.factor(species_data$Consumer.Strategy)
+plot(num_parasite_species~Consumer.Strategy,data=species_data)
+
+# scavenger = only eats dead animals .....detritivore = only eats dead plants
+
+
+# Ensure variables are factors
+species_data$Consumer.Strategy <- as.factor(species_data$Consumer.Strategy)
+species_data$Organismal.Group <- as.factor(species_data$Organismal.Group)
+
+# Fit the individual ANOVA model make plots for these log base 10
+anova_modelC <- aov(num_parasite_species~ Consumer.Strategy, data = species_data)
+anova_modelO <- aov(num_parasite_species~ Organismal.Group, data = species_data)
+
+# Print the summary of the individual ANOVA model
+summary(anova_modelC)
+summary(anova_modelO)
+
+coef(anova_modelC)
+
+# Fit the ANOVA model(2 variables)
+anova_modelOC <- aov(num_parasite_species~ Consumer.Strategy + Organismal.Group, data = species_data)
+coef(anova_modelOC)
+anova_modelOC1 <- aov(num_parasite_species~ Consumer.Strategy * Organismal.Group, data = species_data)
+# Print the summary of the ANOVA model(2 variables)
+summary(anova_modelOC)
+summary(anova_modelOC1)
+
+#Tukey Stats
+TukeyHSD(anova_modelO)
+TukeyHSD(anova_modelC)
+  
